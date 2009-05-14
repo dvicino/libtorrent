@@ -49,6 +49,8 @@ public:
   static Throttle*    create_throttle();
   static void         destroy_throttle(Throttle* throttle);
 
+  Throttle*           create_slave();
+
   bool                is_throttled();
 
   // 0 == UNLIMITED.
@@ -65,9 +67,6 @@ protected:
 
   ThrottleInternal*       m_ptr()       { return reinterpret_cast<ThrottleInternal*>(this); }
   const ThrottleInternal* c_ptr() const { return reinterpret_cast<const ThrottleInternal*>(this); }
-
-private:
-  void                receive_tick() LIBTORRENT_NO_EXPORT;
 
   uint32_t            calculate_min_chunk_size() const LIBTORRENT_NO_EXPORT;
   uint32_t            calculate_max_chunk_size() const LIBTORRENT_NO_EXPORT;

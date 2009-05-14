@@ -1,4 +1,4 @@
-// rTorrent - BitTorrent client
+// libTorrent - BitTorrent library
 // Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
@@ -34,58 +34,53 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef RTORRENT_CORE_DHT_MANAGER_H
-#define RTORRENT_CORE_DHT_MANAGER_H
+#ifndef LIBTORRENT_NET_THROTTLE_INTERNAL_H
+#define LIBTORRENT_NET_THROTTLE_INTERNAL_H
 
+#include <vector>
 #include <rak/priority_queue_default.h>
 
-#include <torrent/object.h>
+#include "torrent/common.h"
+#include "torrent/throttle.h"
 
-namespace core {
+namespace torrent {
 
-class DhtManager {
+class ThrottleInternal : public Throttle {
 public:
-  DhtManager() : m_warned(false), m_start(dht_off) { }
-  ~DhtManager();
+  static const int flag_none = 0;
+  static const int flag_root = 1;
 
-  void                load_dht_cache();
-  void                save_dht_cache();
-  torrent::Object     dht_statistics();
+  ThrottleInternal(int flags);
+  ~ThrottleInternal();
 
-  void                start_dht();
-  void                stop_dht();
-  void                auto_start()                 { if (m_start == dht_auto) start_dht(); }
+  ThrottleInternal*   create_slave();
 
-  void                set_start(const std::string& arg);
+  bool                is_root()         { return m_flags & flag_root; }
 
-  void                set_throttle_name(const std::string& throttleName);
-  const std::string&  throttle_name() const        { return m_throttleName; }
+  void                enable();
+  void                disable();
 
 private:
-  static const int    dht_disable = 0;
-  static const int    dht_off     = 1;
-  static const int    dht_auto    = 2;
-  static const int    dht_on      = 3;
+  // Fraction is a fixed-precision value with the given number of bits after the decimal point.
+  static const uint32_t fraction_bits = 16;
+  static const uint32_t fraction_base = (1 << fraction_bits);
 
-  static const int    dht_settings_num = 4;
-  static const char*  dht_settings[dht_settings_num];
+  typedef std::vector<ThrottleInternal*>  SlaveList;
 
-  void                update();
-  bool                log_statistics(bool force);
+  void                receive_tick();
 
-  unsigned int        m_dhtPrevCycle;
-  unsigned int        m_dhtPrevQueriesSent;
-  unsigned int        m_dhtPrevRepliesReceived;
-  unsigned int        m_dhtPrevQueriesReceived;
-  uint64_t            m_dhtPrevBytesUp;
-  uint64_t            m_dhtPrevBytesDown;
+  // Distribute quota, return amount of quota used. May be negative
+  // if it had more unused quota than is now allowed.
+  int32_t             receive_quota(uint32_t quota, uint32_t fraction);
 
-  rak::priority_item  m_updateTimeout;
-  rak::priority_item  m_stopTimeout;
-  bool                m_warned;
+  int                 m_flags;
+  SlaveList           m_slaveList;
+  SlaveList::iterator m_nextSlave;
 
-  int                 m_start;
-  std::string         m_throttleName;
+  uint32_t            m_unusedQuota;
+
+  rak::timer          m_timeLastTick;
+  rak::priority_item  m_taskTick;
 };
 
 }
