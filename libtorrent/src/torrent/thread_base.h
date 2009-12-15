@@ -1,4 +1,4 @@
-// rTorrent - BitTorrent library
+// libTorrent - BitTorrent library
 // Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
@@ -34,44 +34,64 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#include "config.h"
+#ifndef LIBTORRENT_THREAD_BASE_H
+#define LIBTORRENT_THREAD_BASE_H
 
-#include "thread_worker.h"
-#include "globals.h"
-#include "control.h"
+#include <pthread.h>
+#include <sys/types.h>
+#include <torrent/common.h>
 
-#include <cassert>
-#include <torrent/exceptions.h>
+namespace torrent {
 
-#include "core/manager.h"
+class LIBTORRENT_EXPORT ThreadBase {
+public:
+  ThreadBase() {}
+  virtual ~ThreadBase() {}
 
-ThreadWorker::ThreadWorker() {
-  m_taskTouchLog.set_slot(rak::mem_fn(this, &ThreadWorker::task_touch_log));
+  static inline int   global_queue_size() { return m_global.waiting; }
+
+  static inline void  acquire_global_lock();
+  static inline void  release_global_lock();
+  static inline void  waive_global_lock();
+
+protected:
+
+  struct __cacheline_aligned global_lock_type {
+    int             waiting;
+    pthread_mutex_t lock;
+  };
+
+  static global_lock_type m_global;
+};
+
+inline void
+ThreadBase::acquire_global_lock() {
+  __sync_add_and_fetch(&ThreadBase::m_global.waiting, 1);
+
+  pthread_mutex_lock(&ThreadBase::m_global.lock);
+
+//   if (pthread_mutex_lock(&ThreadBase::m_global.lock))
+//     throw internal_error("Mutex failed.");
+  
+  __sync_synchronize();
+  __sync_fetch_and_sub(&ThreadBase::m_global.waiting, 1);
 }
 
-ThreadWorker::~ThreadWorker() {
+inline void
+ThreadBase::release_global_lock() {
+  __sync_synchronize();
+  pthread_mutex_unlock(&ThreadBase::m_global.lock);
 }
 
-void
-ThreadWorker::init_thread() {
-  m_pollManager = core::PollManager::create_poll_manager();
+inline void
+ThreadBase::waive_global_lock() {
+  __sync_synchronize();
+  pthread_mutex_unlock(&ThreadBase::m_global.lock);
 
-  m_state = STATE_INITIALIZED;
-}
-
-void
-ThreadWorker::start_log_counter(ThreadBase* baseThread) {
-  ThreadWorker* thread = (ThreadWorker*)baseThread;
-
-  if (!thread->m_taskTouchLog.is_queued())
-    priority_queue_insert(&thread->m_taskScheduler, &thread->m_taskTouchLog, cachedTime);
-}
-
-void
-ThreadWorker::task_touch_log() {
-  priority_queue_insert(&m_taskScheduler, &m_taskTouchLog, cachedTime + rak::timer::from_seconds(1));
-
+  // Do we need to sleep here? Make a CppUnit test for this.
   acquire_global_lock();
-  control->core()->push_log("Tick Tock.");
-  release_global_lock();
 }
+
+}  
+
+#endif

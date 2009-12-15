@@ -1,4 +1,4 @@
-// rTorrent - BitTorrent library
+// libTorrent - BitTorrent library
 // Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
@@ -36,42 +36,10 @@
 
 #include "config.h"
 
-#include "thread_worker.h"
-#include "globals.h"
-#include "control.h"
+#include "thread_base.h"
 
-#include <cassert>
-#include <torrent/exceptions.h>
+namespace torrent {
 
-#include "core/manager.h"
+ThreadBase::global_lock_type ThreadBase::m_global = { 0, PTHREAD_MUTEX_INITIALIZER };
 
-ThreadWorker::ThreadWorker() {
-  m_taskTouchLog.set_slot(rak::mem_fn(this, &ThreadWorker::task_touch_log));
-}
-
-ThreadWorker::~ThreadWorker() {
-}
-
-void
-ThreadWorker::init_thread() {
-  m_pollManager = core::PollManager::create_poll_manager();
-
-  m_state = STATE_INITIALIZED;
-}
-
-void
-ThreadWorker::start_log_counter(ThreadBase* baseThread) {
-  ThreadWorker* thread = (ThreadWorker*)baseThread;
-
-  if (!thread->m_taskTouchLog.is_queued())
-    priority_queue_insert(&thread->m_taskScheduler, &thread->m_taskTouchLog, cachedTime);
-}
-
-void
-ThreadWorker::task_touch_log() {
-  priority_queue_insert(&m_taskScheduler, &m_taskTouchLog, cachedTime + rak::timer::from_seconds(1));
-
-  acquire_global_lock();
-  control->core()->push_log("Tick Tock.");
-  release_global_lock();
 }
